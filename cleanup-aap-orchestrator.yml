@@ -1,0 +1,54 @@
+---
+- name: Clean up AAP after Orchestrator teardown
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - vars/main.yml
+    - vars/vault.yml
+
+  tasks:
+
+    - name: List OAuth2 applications on AAP Gateway
+      ansible.builtin.uri:
+        url: "{{ aap_gateway_url }}/api/gateway/v1/applications/"
+        method: GET
+        user: "{{ aap_admin_username | default('admin') }}"
+        password: "{{ aap_admin_password }}"
+        force_basic_auth: true
+        validate_certs: false
+      register: aap_apps
+
+    - name: Find Orchestrator OAuth2 apps
+      ansible.builtin.set_fact:
+        orchestrator_oauth_apps: >-
+          {{ aap_apps.json.results
+             | selectattr('name', 'search', '(?i)syntara|orchestrator')
+             | list }}
+
+    - name: Display OAuth2 apps to delete
+      ansible.builtin.debug:
+        msg: "Deleting OAuth2 app: ID={{ item.id }}, Name={{ item.name }}"
+      loop: "{{ orchestrator_oauth_apps }}"
+
+    - name: Delete Orchestrator OAuth2 apps from AAP
+      ansible.builtin.uri:
+        url: "{{ aap_gateway_url }}/api/gateway/v1/applications/{{ item.id }}/"
+        method: DELETE
+        user: "{{ aap_admin_username | default('admin') }}"
+        password: "{{ aap_admin_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        status_code: [204]
+      loop: "{{ orchestrator_oauth_apps }}"
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg:
+          - "================================================"
+          - "AAP cleanup complete"
+          - "================================================"
+          - "Deleted {{ orchestrator_oauth_apps | length }} OAuth2 app(s)"
+          - "AAP is ready for a fresh Orchestrator deployment"
+          - "================================================"

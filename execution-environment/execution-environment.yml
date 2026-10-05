@@ -1,0 +1,28 @@
+---
+# No custom build is needed for the current deployment. The stock
+# ee-supported-rhel9 image already includes all certified collections and the
+# kubernetes Python library. Register it directly in AAP as an Execution
+# Environment -- see ../documentation.md.
+#
+# To switch to a minimal custom EE (~500MB instead of ~2.5GB), comment out the
+# base_image below, uncomment the ee-minimal block and the dependencies block,
+# then build:
+#
+#     ansible-builder build -f execution-environment/execution-environment.yml \
+#         -t orchestrator-ee:latest
+#
+# Run it from the automation-orchestrator/ directory. ansible-builder resolves
+# dependencies.galaxy relative to this file, so ../collections/requirements.yml
+# reaches the sibling collections/ directory and is copied into the build
+# context as _build/requirements.yml. Verified with ansible-builder 3.1.1.
+version: 3
+
+images:
+    base_image:
+        name: registry.redhat.io/ansible-automation-platform-27/ee-supported-rhel9:latest
+
+#   base_image:
+#       name: registry.redhat.io/ansible-automation-platform-27/ee-minimal-rhel9:latest
+#
+# dependencies:
+#     galaxy: ../collections/requirements.yml

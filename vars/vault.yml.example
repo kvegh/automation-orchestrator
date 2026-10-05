@@ -1,0 +1,11 @@
+---
+# Copy to vault.yml, fill in values, and encrypt: ansible-vault encrypt vars/vault.yml
+# Commit the encrypted file to git. AAP decrypts at runtime via Vault credential.
+#
+# OCP credentials (ocp_api_url, ocp_admin_password) are provided at launch
+# via the job template survey — they are NOT stored in the vault.
+
+# AAP integration (skip AAP config if aap_gateway_url is omitted)
+aap_gateway_url: "https://aap.example.com"
+aap_admin_username: "admin"
+aap_admin_password: "your-aap-admin-password"

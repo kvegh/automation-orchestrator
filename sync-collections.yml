@@ -1,0 +1,69 @@
+---
+# Pre-flight: Sync required collections to Private Automation Hub.
+# Run this on the default EE (which already has ansible.platform).
+# After sync, the custom Orchestrator EE can mount these at runtime.
+
+- name: Sync collections to Private Automation Hub
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - vars/vault.yml
+
+  vars:
+    pah_url: "{{ aap_gateway_url }}"
+    pah_validate_certs: false
+    required_collections:
+      - namespace: redhat
+        name: openshift
+      - namespace: ansible
+        name: platform
+
+  tasks:
+
+    - name: Trigger rh-certified repository sync
+      ansible.builtin.uri:
+        url: "{{ pah_url }}/api/galaxy/content/rh-certified/v3/sync/"
+        method: POST
+        user: "{{ aap_admin_username }}"
+        password: "{{ aap_admin_password }}"
+        force_basic_auth: true
+        validate_certs: "{{ pah_validate_certs }}"
+        status_code: [200, 202]
+
+    - name: Wait for sync to complete
+      ansible.builtin.uri:
+        url: "{{ pah_url }}/api/galaxy/_ui/v1/remotes/?name=rh-certified"
+        method: GET
+        user: "{{ aap_admin_username }}"
+        password: "{{ aap_admin_password }}"
+        force_basic_auth: true
+        validate_certs: "{{ pah_validate_certs }}"
+      register: sync_status
+      until: >-
+        sync_status.json.results | length > 0 and
+        (sync_status.json.results[0].last_sync_task.state | default('')) in ['completed', 'skipped']
+      retries: 30
+      delay: 20
+
+    - name: Verify required collections are available
+      ansible.builtin.uri:
+        url: >-
+          {{ pah_url }}/api/galaxy/v3/plugin/ansible/search/collection-versions/
+          ?name={{ item.name }}&namespace={{ item.namespace }}
+        method: GET
+        user: "{{ aap_admin_username }}"
+        password: "{{ aap_admin_password }}"
+        force_basic_auth: true
+        validate_certs: "{{ pah_validate_certs }}"
+        status_code: [200]
+      register: collection_check
+      failed_when: collection_check.json.data | length == 0
+      loop: "{{ required_collections }}"
+      loop_control:
+        label: "{{ item.namespace }}.{{ item.name }}"
+
+    - name: Collections synced
+      ansible.builtin.debug:
+        msg: "All required collections are available in PAH"
