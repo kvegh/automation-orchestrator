@@ -12,7 +12,7 @@
 #         -t orchestrator-ee:latest
 #
 # Run it from the automation-orchestrator/ directory. ansible-builder resolves
-# dependencies.galaxy relative to this file, so ../collections/requirements.yml
+# dependencies.galaxy relative to this file, so requirements.yml
 # reaches the sibling collections/ directory and is copied into the build
 # context as _build/requirements.yml. Verified with ansible-builder 3.1.1.
 version: 3
@@ -25,4 +25,4 @@ images:
 #       name: registry.redhat.io/ansible-automation-platform-27/ee-minimal-rhel9:latest
 #
 # dependencies:
-#     galaxy: ../collections/requirements.yml
+#     galaxy: requirements.yml

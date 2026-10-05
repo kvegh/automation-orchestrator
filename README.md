@@ -28,7 +28,7 @@ by Red Hat**. This is a demo deployment. See
 | `sync-collections.yml` | Unused in the current deployment — syncs collections to private automation hub. Kept for a future switch to `ee-minimal-rhel9` ([why](documentation.md#files)) |
 | `vars/main.yml` | Default variables |
 | `vars/vault.yml.example` | Template for secrets (copy to `vault.yml`, encrypt) |
-| `collections/requirements.yml` | Not read at runtime — collection list staged for the `ee-minimal-rhel9` switch ([why](documentation.md#what-collectionsrequirementsyml-is-for)) |
+| `execution-environment/requirements.yml` | Not read at runtime — collection list staged for the `ee-minimal-rhel9` switch ([why](documentation.md#what-execution-environmentrequirementsyml-is-for)) |
 | `execution-environment/execution-environment.yml` | EE base image reference |
 | `documentation.md` | Full documentation |
 | `PLAN.md` | Original design plan (historical) |

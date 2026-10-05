@@ -46,7 +46,7 @@ Cross-cluster link: Orchestrator --> AAP Gateway on port 443 (HTTPS only, no inb
 6. **Orchestrator configuration**: No certified Ansible collection exists for Orchestrator's own config (identity providers, integrations). The REST API is the only documented interface -- `ansible.builtin.uri` is the correct approach.
 7. **Passwords**: Generated at runtime via `lookup('password', ...)`. Idempotent -- check if K8s secret exists first, only generate if missing. Passwords live only in OCP secrets, never in git.
 8. **AAP credentials**: No admin rights handed to Orchestrator. Manual OAuth path -- create dedicated OAuth app and service account on AAP via `ansible.platform`, pass only client_id/secret and service account credentials to Orchestrator.
-9. **EE**: Custom build based on `ee-minimal-rhel9` -- add `python3-kubernetes` and `python3-openshift` RPMs only. Collections mounted at runtime via `collections/requirements.yml` (must be synced to PAH).
+9. **EE**: Custom build based on `ee-minimal-rhel9` -- add `python3-kubernetes` and `python3-openshift` RPMs only. Collections mounted at runtime via `execution-environment/requirements.yml` (must be synced to PAH).
 10. **Disk**: AAP host has sufficient disk space. Custom minimal EE (~500MB) fits comfortably.
 11. **Collection sync**: Automated via `ansible.platform` in a pre-flight play running on the default EE. Syncs `redhat.openshift` and `ansible.platform` from console.redhat.com to PAH.
 12. **Secrets handling**: Zero secrets in playbook or plan files. OCP token and AAP admin creds injected via AAP credential types as extra vars. PG and Orchestrator admin passwords generated at runtime, stored only in K8s secrets.
@@ -63,7 +63,7 @@ Cross-cluster link: Orchestrator --> AAP Gateway on port 443 (HTTPS only, no inb
 - **Orchestrator REST API via `ansible.builtin.uri`** for post-deploy configuration (identity provider, integrations) — no certified collection exists for this.
 - **No admin credentials handed to Orchestrator.** Manual OAuth path: create OAuth app + service account on AAP via `ansible.platform`, pass only client_id/secret to Orchestrator.
 - **No secrets in any file.** Passwords generated at runtime. AAP credentials injected via AAP credential types as extra vars at job launch time.
-- **Collections runtime-mounted** from PAH via `collections/requirements.yml`, not baked into EE.
+- **Collections runtime-mounted** from PAH via `execution-environment/requirements.yml`, not baked into EE.
 - **EE based on `ee-minimal-rhel9`**, only adds Python libraries. Build on the KVM host, not on the AAP VM.
 - **Idempotent.** Re-running the playbook must not break an existing deployment (check-before-create pattern for secrets, operators, CRs).
 
@@ -257,12 +257,11 @@ automation-orchestrator/
   PLAN.md                               # This plan document
   deploy-automation-orchestrator.yml    # Main playbook (inline k8s definitions, no templates)
   sync-collections.yml                  # Pre-flight: sync collections to PAH (runs on default EE)
-  collections/
-    requirements.yml                    # Runtime collection mounting (redhat.openshift, ansible.platform)
   vars/
     main.yml                            # Non-secret variables (namespace, channel, PG config)
     vault.yml.example                   # Template showing required var names (no values)
   execution-environment/
+    requirements.yml                    # Runtime collection mounting (redhat.openshift, ansible.platform)
     execution-environment.yml           # EE definition based on ee-minimal-rhel9
   README.md                             # Setup docs
 ```
@@ -289,7 +288,7 @@ Separate automation (runs before the main playbook, on default EE):
 - **Sync collections to PAH** -- ensure `redhat.openshift` and `ansible.platform` are synced from console.redhat.com
 - **Build + push custom EE** -- `ansible-builder build` on the KVM host, push to PAH container registry, register in AAP
 
-### Collections needed (runtime-mounted via collections/requirements.yml)
+### Collections needed (runtime-mounted via execution-environment/requirements.yml)
 
 - `redhat.openshift` (certified -- k8s, k8s_info, openshift_auth for OCP resources)
 - `ansible.platform` (certified -- OAuth2 app, users, roles on AAP Gateway)

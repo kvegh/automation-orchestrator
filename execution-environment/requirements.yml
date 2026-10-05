@@ -1,0 +1,22 @@
+---
+# Collections required by deploy-automation-orchestrator.yml.
+#
+# Deliberately NOT at collections/requirements.yml. AAP project sync installs
+# from that exact path at the repo root, and these collections are not on the
+# configured galaxy server (rh-certified), so the sync fails outright:
+#
+#     ERROR! Could not satisfy the following requirements:
+#     * redhat.openshift:* (direct request)
+#
+# Nothing needs installing at sync time anyway -- both collections are baked
+# into ee-supported-rhel9 (redhat.openshift 6.0.0, kubernetes.core 6.4.0).
+#
+# This file is the input for the planned switch to a minimal custom EE. It is
+# wired up (commented out) as dependencies.galaxy in
+# execution-environment.yml, and it is what ../sync-collections.yml would push
+# to private automation hub. Keep the list accurate so that switch is a
+# one-line uncomment.
+collections:
+  - name: redhat.openshift    # k8s -- all OCP resource mutations
+  - name: kubernetes.core     # k8s_info -- all OCP queries, and the
+                              # group/kubernetes.core.k8s module_defaults group

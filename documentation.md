@@ -272,20 +272,25 @@ the cleanup playbook exists to remove.
 | `vars/main.yml` | Non-secret defaults |
 | `vars/vault.yml` | Encrypted AAP credentials (committed encrypted) |
 | `vars/vault.yml.example` | Template — copy, fill, `ansible-vault encrypt` |
-| `collections/requirements.yml` | Not read at runtime. The collection list for the planned `ee-minimal-rhel9` switch, see below |
+| `execution-environment/requirements.yml` | Not read at runtime. The collection list for the planned `ee-minimal-rhel9` switch, see below |
 | `execution-environment/execution-environment.yml` | EE base image reference |
 | `PLAN.md` | Original design plan (historical) |
 | `PROMPT.md` | The implementation prompt used to build this |
 | `documentation.md` | This file |
 
-### What `collections/requirements.yml` is for
+### What `execution-environment/requirements.yml` is for
 
-It is **not** read by AAP project sync. AAP resolves collection requirements relative to the
-**project root**, at `<project>/collections/requirements.yml` — not relative to the playbook's
-directory. This repo's project root is `AAP-advanced-features/`, so a file at
-`automation-orchestrator/collections/requirements.yml` is never read by project sync, regardless
-of content. Today the collections come baked into the `ee-supported-rhel9` image and nothing
-installs from this file at all.
+It is deliberately **not** at `collections/requirements.yml`. AAP project sync installs from that
+exact path at the repo root, and neither collection is available on the configured galaxy server
+(rh-certified only), so a file there fails the sync outright:
+
+```
+ERROR! Could not satisfy the following requirements:
+* redhat.openshift:* (direct request)
+```
+
+Nothing needs installing at sync time in any case — both collections ship in
+`ee-supported-rhel9` (`redhat.openshift` 6.0.0, `kubernetes.core` 6.4.0).
 
 Its job is to be the input for the planned switch to a minimal custom EE. It is already wired into
 `execution-environment/execution-environment.yml` as `dependencies.galaxy`, commented out
@@ -293,11 +298,11 @@ alongside the `ee-minimal-rhel9` base image:
 
 ```yaml
 # dependencies:
-#     galaxy: ../collections/requirements.yml
+#     galaxy: requirements.yml
 ```
 
-`ansible-builder` resolves that path relative to the definition file, so it reaches the sibling
-`collections/` directory and lands in the build context as `_build/requirements.yml` (verified with
+`ansible-builder` resolves that path relative to the definition file, so the sibling
+`requirements.yml` lands in the build context as `_build/requirements.yml` (verified with
 ansible-builder 3.1.1). The same file is what `sync-collections.yml` would push to private
 automation hub if collections ever have to be pulled at runtime instead.
 
@@ -586,7 +591,7 @@ Use `{{ var | default('value') }}` inline in each task instead.
 - [ ] **Switch to `ee-minimal-rhel9`.** `ee-supported-rhel9` is ~2.5GB; a minimal EE with only
       `redhat.openshift` and `kubernetes.core` baked in via `dependencies.galaxy` would be ~500MB.
       Blocked on getting gateway-compatible galaxy credentials working so collections can be
-      pulled from PAH. Both `collections/requirements.yml` and `sync-collections.yml` are kept
+      pulled from PAH. Both `execution-environment/requirements.yml` and `sync-collections.yml` are kept
       ready for this; the EE definition already has the change staged as comments.
 - [ ] **Route-host derivation is silent on failure.** A cluster that does not match the
       demo.redhat.com URL convention yields a wrong hostname and an unreachable deployment rather
