@@ -11,10 +11,10 @@
 #     ansible-builder build -f execution-environment/execution-environment.yml \
 #         -t orchestrator-ee:latest
 #
-# Run it from the automation-orchestrator/ directory. ansible-builder resolves
-# dependencies.galaxy relative to this file, so requirements.yml
-# reaches the sibling collections/ directory and is copied into the build
-# context as _build/requirements.yml. Verified with ansible-builder 3.1.1.
+# Run it from the repo root. ansible-builder resolves dependencies.galaxy
+# relative to this file, so requirements.yml picks up the one in this same
+# directory and is copied into the build context as _build/requirements.yml.
+# Verified with ansible-builder 3.1.1.
 version: 3
 
 images:
