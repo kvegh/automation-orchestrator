@@ -4,7 +4,11 @@ Deploys Automation Orchestrator on OpenShift via OLM, with CloudNativePG for Pos
 optional AAP integration.
 
 **Full documentation: [documentation.md](documentation.md)** — variables, API reference, gotchas,
-known gaps. [PLAN.md](PLAN.md) is the original design plan and is historical only.
+known gaps, [validation history](documentation.md#validation-history). [PLAN.md](PLAN.md) is the
+original design plan and is historical only.
+
+Last validated end to end on 2026-10-06, after this directory became its own repository — see
+[Validation history](documentation.md#validation-history).
 
 ## Prerequisites
 

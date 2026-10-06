@@ -227,6 +227,49 @@ namespace.
 
 ---
 
+## Validation history
+
+### 2026-10-06 — after the repo/submodule reorganization
+
+This directory used to live inside the `AAP-advanced-features` umbrella repo and became its own
+repository, consumed by the umbrella as a submodule. That moved the AAP project root from
+`AAP-advanced-features/` to this directory, which changed three things: the job template playbook
+path lost its `automation-orchestrator/` prefix, `collections/requirements.yml` landed at the repo
+root where project sync reads it (and failed the sync — see
+[What `execution-environment/requirements.yml` is for](#what-execution-environmentrequirementsyml-is-for)),
+and the umbrella's root `ansible.cfg` stopped applying.
+
+A full deployment was run against a fresh cluster to confirm none of it broke the deployment:
+
+| | |
+|---|---|
+| Deploy job | AAP job 1066, `ok=55 changed=13 failed=0 skipped=3`, 58 tasks, 476s |
+| Cleanup job | AAP job 1069, `ok=5 failed=0` — deleted exactly the one `Syntara` app, left the three unrelated gateway OAuth apps alone |
+| Revision | `8a686d7` |
+| Cluster | OCP on demo.redhat.com |
+
+Confirmed working end to end: project sync from the standalone repo, the root-relative playbook
+path, vault decryption inside the new checkout, route-host derivation, both operators, the
+generated PG secrets, the CloudNativePG cluster, the `AutomationOrchestrator` CR, and the whole
+post-deploy REST sequence through to the AAP integration.
+
+The missing `ansible.cfg` is a non-issue and does not need recreating. Its `collections_path` was
+already inert under AAP — `ansible-runner` sets `ANSIBLE_COLLECTIONS_PATH`, and an environment
+variable outranks `ansible.cfg` in Ansible's config precedence. The run resolved
+`redhat.openshift` and `kubernetes.core` from the EE at `/usr/share/ansible/collections` as
+intended. Its `[galaxy_server.pah]` block only ever affected sync-time resolution, and it held
+placeholder values (`aap.YOURDOMAIN.tld`, `SET_VIA_AUTOMATION_HUB_UI`) — that has to be filled in
+for real before the `ee-minimal-rhel9` switch, which is the only thing that would need it.
+
+Two earlier attempts the same day (jobs 1059 and 1063) failed at **Obtain OCP API token** with
+`Errno 111 Connection refused` against the `oauth-openshift.apps.*` route. That was the cluster
+still coming up, not a regression — the API server answers on `:6443` well before the ingress
+routers and the authentication operator finish rolling out. Poll
+`https://oauth-openshift.apps.<domain>/healthz` for `ok` before launching against a newly
+provisioned cluster.
+
+---
+
 ## Idempotency
 
 - **K8s secrets** — check-before-create. Passwords are generated on the first run only; on a
