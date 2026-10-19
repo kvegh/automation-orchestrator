@@ -1,0 +1,31 @@
+---
+- name: Require explicit AAP integration credentials
+  ansible.builtin.assert:
+    that:
+      - aap_gateway_url is defined and aap_gateway_url is string
+      - aap_admin_username is defined and aap_admin_username is string
+      - aap_admin_password is defined and aap_admin_password is string
+      - aap_admin_username | trim | length > 0
+      - aap_admin_password | length > 0
+    fail_msg: Provide aap_gateway_url, aap_admin_username, and aap_admin_password at launch.
+  no_log: true
+
+- name: Require an HTTPS AAP origin without embedded credentials
+  ansible.builtin.assert:
+    that:
+      - (aap_gateway_url | ansible.builtin.urlsplit('scheme')) == 'https'
+      - (aap_gateway_url | ansible.builtin.urlsplit('hostname') | default('', true) | length) > 0
+      - (aap_gateway_url | ansible.builtin.urlsplit('port')) is none or 0 < (aap_gateway_url | ansible.builtin.urlsplit('port')) <= 65535
+      - (aap_gateway_url | ansible.builtin.urlsplit('username')) is none
+      - (aap_gateway_url | ansible.builtin.urlsplit('password')) is none
+      - (aap_gateway_url | ansible.builtin.urlsplit('path')) in ['', '/']
+      - (aap_gateway_url | ansible.builtin.urlsplit('query')) == ''
+      - (aap_gateway_url | ansible.builtin.urlsplit('fragment')) == ''
+      - aap_gateway_url is not search('\\s')
+    fail_msg: aap_gateway_url must be an HTTPS origin with no credentials, path, query, or fragment.
+  no_log: true
+
+- name: Normalize the explicitly selected AAP target
+  ansible.builtin.set_fact:
+    orchestrator_aap_url: "{{ aap_gateway_url.rstrip('/') }}"
+  no_log: true

@@ -6,49 +6,116 @@
 
   vars_files:
     - vars/main.yml
-    - vars/vault.yml
+
+  pre_tasks:
+    - name: Validate the explicitly selected AAP cleanup target
+      ansible.builtin.include_tasks: tasks/validate-aap-target.yml
+
+    - name: Read exact application names from a list or a YAML or JSON survey answer
+      ansible.builtin.set_fact:
+        orchestrator_cleanup_names: >-
+          {{ aap_cleanup_application_names | from_yaml
+             if aap_cleanup_application_names is string
+             else aap_cleanup_application_names }}
+      when: aap_cleanup_application_names is defined
+
+    - name: Require exact OAuth application names to remove
+      ansible.builtin.assert:
+        that:
+          - orchestrator_cleanup_names is defined
+          - orchestrator_cleanup_names is sequence
+          - orchestrator_cleanup_names is not string
+          - orchestrator_cleanup_names | length > 0
+          - orchestrator_cleanup_names | select('string') | list | length == orchestrator_cleanup_names | length
+          - orchestrator_cleanup_names | map('trim') | select('equalto', '') | list | length == 0
+          - orchestrator_cleanup_names | unique | length == orchestrator_cleanup_names | length
+        fail_msg: Provide a nonempty list of exact, unique OAuth application names in aap_cleanup_application_names.
 
   tasks:
+    - name: Remove only the requested applications from the selected AAP
+      block:
+        - name: Obtain a temporary write token from the selected AAP Gateway
+          ansible.builtin.uri:
+            url: "{{ orchestrator_aap_url }}/api/gateway/v1/tokens/"
+            method: POST
+            url_username: "{{ aap_admin_username }}"
+            url_password: "{{ aap_admin_password }}"
+            force_basic_auth: true
+            use_netrc: false
+            follow_redirects: none
+            validate_certs: "{{ aap_validate_certs }}"
+            ca_path: "{{ aap_ca_path | default(omit) }}"
+            body_format: json
+            body:
+              description: Temporary Orchestrator application cleanup
+              scope: write
+            status_code: [201]
+          register: aap_cleanup_token
+          no_log: true
 
-    - name: List OAuth2 applications on AAP Gateway
-      ansible.builtin.uri:
-        url: "{{ aap_gateway_url }}/api/gateway/v1/applications/"
-        method: GET
-        user: "{{ aap_admin_username | default('admin') }}"
-        password: "{{ aap_admin_password }}"
-        force_basic_auth: true
-        validate_certs: false
-      register: aap_apps
+        - name: Look up each exact application name on the selected AAP Gateway
+          ansible.builtin.uri:
+            url: "{{ orchestrator_aap_url }}/api/gateway/v1/applications/?name={{ item | urlencode }}"
+            method: GET
+            headers:
+              Authorization: "Bearer {{ aap_cleanup_token.json.token }}"
+            use_netrc: false
+            follow_redirects: none
+            validate_certs: "{{ aap_validate_certs }}"
+            ca_path: "{{ aap_ca_path | default(omit) }}"
+            status_code: [200]
+          loop: "{{ orchestrator_cleanup_names }}"
+          register: aap_cleanup_lookups
+          no_log: true
 
-    - name: Find Orchestrator OAuth2 apps
-      ansible.builtin.set_fact:
-        orchestrator_oauth_apps: >-
-          {{ aap_apps.json.results
-             | selectattr('name', 'search', '(?i)syntara|orchestrator')
-             | list }}
+        - name: Reject ambiguous or unexpected application matches before deleting anything
+          ansible.builtin.assert:
+            that:
+              - item.json.count == item.json.results | length
+              - item.json.count <= 1
+              - item.json.results | rejectattr('name', 'equalto', item.item) | list | length == 0
+            fail_msg: Application lookup must return zero or one exact match; no applications were deleted.
+          loop: "{{ aap_cleanup_lookups.results }}"
+          no_log: true
 
-    - name: Display OAuth2 apps to delete
+        - name: Collect the explicitly matched OAuth applications
+          ansible.builtin.set_fact:
+            orchestrator_oauth_apps: "{{ aap_cleanup_lookups.results | map(attribute='json.results') | flatten }}"
+          no_log: true
+
+        - name: Delete the matched OAuth applications from the selected AAP Gateway
+          ansible.builtin.uri:
+            url: "{{ orchestrator_aap_url }}/api/gateway/v1/applications/{{ item.id }}/"
+            method: DELETE
+            headers:
+              Authorization: "Bearer {{ aap_cleanup_token.json.token }}"
+            use_netrc: false
+            follow_redirects: none
+            validate_certs: "{{ aap_validate_certs }}"
+            ca_path: "{{ aap_ca_path | default(omit) }}"
+            status_code: [204]
+          loop: "{{ orchestrator_oauth_apps }}"
+          no_log: true
+
+      always:
+        - name: Revoke the temporary Gateway token even when cleanup fails
+          ansible.builtin.uri:
+            url: "{{ orchestrator_aap_url }}/api/gateway/v1/tokens/{{ aap_cleanup_token.json.id }}/"
+            method: DELETE
+            headers:
+              Authorization: "Bearer {{ aap_cleanup_token.json.token }}"
+            use_netrc: false
+            follow_redirects: none
+            validate_certs: "{{ aap_validate_certs }}"
+            ca_path: "{{ aap_ca_path | default(omit) }}"
+            status_code: [204]
+          when:
+            - aap_cleanup_token is defined
+            - aap_cleanup_token.json is defined
+            - aap_cleanup_token.json.id is defined
+            - aap_cleanup_token.json.token is defined
+          no_log: true
+
+    - name: Report completed cleanup
       ansible.builtin.debug:
-        msg: "Deleting OAuth2 app: ID={{ item.id }}, Name={{ item.name }}"
-      loop: "{{ orchestrator_oauth_apps }}"
-
-    - name: Delete Orchestrator OAuth2 apps from AAP
-      ansible.builtin.uri:
-        url: "{{ aap_gateway_url }}/api/gateway/v1/applications/{{ item.id }}/"
-        method: DELETE
-        user: "{{ aap_admin_username | default('admin') }}"
-        password: "{{ aap_admin_password }}"
-        force_basic_auth: true
-        validate_certs: false
-        status_code: [204]
-      loop: "{{ orchestrator_oauth_apps }}"
-
-    - name: Summary
-      ansible.builtin.debug:
-        msg:
-          - "================================================"
-          - "AAP cleanup complete"
-          - "================================================"
-          - "Deleted {{ orchestrator_oauth_apps | length }} OAuth2 app(s)"
-          - "AAP is ready for a fresh Orchestrator deployment"
-          - "================================================"
+        msg: "Deleted {{ orchestrator_oauth_apps | length }} explicitly matched OAuth application(s) from the selected AAP."

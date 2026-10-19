@@ -64,7 +64,9 @@ direction — but it **does** need to be reachable *from* the OCP pods.
 - `ee-supported-rhel9` registered as an execution environment in AAP. It already contains
   `redhat.openshift`, `kubernetes.core`, `ansible.platform` and the `kubernetes` Python library,
   so no custom EE build is needed.
-- An AAP vault credential attached to the job template, to decrypt `vars/vault.yml` at runtime.
+- Explicit AAP target credentials at launch when integration is requested. The repository
+  `vars/vault.yml` is no longer loaded; attach a Vault credential only for an explicitly selected
+  encrypted launch file.
 
 ### CloudNativePG channel caveat
 
@@ -99,16 +101,24 @@ Then register the EE in AAP with pull policy `Never`.
 | `ocp_admin_password` | yes | survey password field, stored as `$encrypted$` |
 | `ocp_admin_username` | no | defaults to `admin`. Override if the cluster's cluster-admin account is named something else — otherwise token acquisition fails with a bare 401. |
 
-OCP credentials are deliberately **never** stored in the vault. The playbook exchanges them for an
-API token at runtime via the OCP OAuth `openshift-challenging-client` flow.
+OCP credentials are supplied at launch through a password survey or an explicitly loaded encrypted
+variables file outside this repository. The playbook exchanges them for an API token at runtime
+via the OCP OAuth `openshift-challenging-client` flow.
 
-### Provided via `vars/vault.yml` (ansible-vault encrypted, committed)
+### AAP target provided at launch
 
 | Variable | Notes |
 |---|---|
-| `aap_gateway_url` | Omit to skip AAP integration entirely — Orchestrator then deploys standalone. Must be the **public** URL: the Orchestrator pods resolve and connect to it from inside the OCP cluster, so an internal hostname will not work. |
-| `aap_admin_username` | defaults to `admin` |
-| `aap_admin_password` | |
+| `aap_gateway_url` | HTTPS origin reachable and resolvable from OpenShift. Supply together with both credentials; omit or empty all three for standalone deployment. No repository default selects a target. |
+| `aap_admin_username` | Explicit username on the selected target; no admin username default. |
+| `aap_admin_password` | Password on the selected target; use a password survey, secret credential injection, or an explicitly loaded encrypted variables file. |
+| `aap_validate_certs` | Defaults to `true`, for AAP integration and cleanup. Ensure both the execution environment and Orchestrator pods trust the target certificate. |
+| `aap_ca_path` | Optional trusted CA PEM file for cleanup requests; does not configure pod trust. |
+| `aap_cleanup_application_names` | Cleanup only: nonempty list of exact, unique OAuth application names, or a YAML/JSON list entered in a survey textarea. Duplicate server-side names cause failure before any application deletion. |
+
+Both playbooks validate the target before making changes. Deployment rejects existing AAP
+identity-provider or integration settings that refer to a different AAP instead of silently
+reusing them. Existing integration migration and credential rotation are separate operations.
 
 ### Route hostname derivation
 
@@ -133,7 +143,7 @@ to be right before anything else can work.
 
 `orchestrator_namespace`, `cnpg_namespace`, `orchestrator_channel`, `cnpg_channel`,
 `orchestrator_operator_name`, `cnpg_operator_name`, `orchestrator_cr_name`, `cnpg_cluster_name`,
-`cnpg_instances`, `cnpg_storage_size`, `pg_port`, `pg_ssl_mode`, `ocp_validate_certs`.
+`cnpg_instances`, `cnpg_storage_size`, `pg_port`, `pg_ssl_mode`, `ocp_validate_certs`, `aap_validate_certs`.
 
 `ocp_validate_certs` is `false` because demo.redhat.com clusters use self-signed certificates.
 
@@ -166,7 +176,7 @@ passwords.
 7. **AutomationOrchestrator CR** — point it at the CNPG service, the two database secrets, the
    derived route host and the generated admin password secret. Wait for `Ready=True`.
 8. **Output** — print the route URL, admin user, admin password and PG host.
-9. **AAP integration** (only when `aap_gateway_url` is defined) — authenticate to the Orchestrator
+9. **AAP integration** (only when explicit AAP inputs have been validated) — authenticate to the Orchestrator
    API, change the local admin's email, re-authenticate, configure AAP as an OIDC identity
    provider via `setup_aap_oidc`, create the AAP health-check credential, create the AAP
    integration.
@@ -287,13 +297,20 @@ provisioned cluster.
 
 ### AAP side — required between deployments
 
-`cleanup-aap-orchestrator.yml` lists OAuth2 applications on the AAP gateway
-(`/api/gateway/v1/applications/`), selects any whose name matches `syntara` or `orchestrator`, and
-deletes them.
+`cleanup-aap-orchestrator.yml` requires an explicit target URL, its admin credentials, and
+`aap_cleanup_application_names`. It looks up each exact name using the selected Gateway's
+`/api/gateway/v1/applications/` endpoint. Only zero or one exact match per name is accepted;
+ambiguous, unexpected, or incomplete results stop the run before any application deletion.
+It never follows a returned URL to another host.
 
-This must run before deploying Orchestrator against a new OCP cluster. `setup_aap_oidc` refuses to
-create a duplicate OAuth2 application, so a leftover app from a destroyed cluster makes every
-subsequent deployment fail. Give it its own AAP job template.
+AAP 2.7 authentication uses the documented Gateway flow: bootstrap a temporary write token
+with username/password at `POST /api/gateway/v1/tokens/`, then use Bearer authentication for
+application requests. An `always` task revokes that token even when a lookup or deletion fails.
+The token and credential-bearing requests remain protected by `no_log: true`.
+
+Run cleanup before deploying against a replacement OCP cluster when the previous OAuth app
+still exists. The Orchestrator `setup_aap_oidc` endpoint continues receiving its supported
+`admin_username` / `admin_password` inputs. No platform authentication settings are changed.
 
 ### OCP side — not automated, by design
 
@@ -313,8 +330,11 @@ the cleanup playbook exists to remove.
 | `cleanup-aap-orchestrator.yml` | Removes Orchestrator OAuth2 apps from AAP (run between clusters) |
 | `sync-collections.yml` | **Not used in the current deployment.** Sets a requirements filter on the `rh-certified` remote in private automation hub, triggers a sync, and waits for it. Kept for the day the EE switches back to `ee-minimal-rhel9` and collections have to come from PAH at runtime instead of being baked into the image. |
 | `vars/main.yml` | Non-secret defaults |
-| `vars/vault.yml` | Encrypted AAP credentials (committed encrypted) |
-| `vars/vault.yml.example` | Template — copy, fill, `ansible-vault encrypt` |
+| `vars/vault.yml` | Legacy encrypted inputs; not loaded by either deployment or cleanup |
+| `vars/vault.yml.example` | Optional launch-input template — copy outside the checkout and encrypt |
+| `tasks/validate-aap-target.yml` | Shared explicit-target input validation |
+| `tests/test_aap_target.py` | Local HTTPS behavior tests |
+| `design_decisions_history.md` | Decision rationale and implementation commit references |
 | `execution-environment/requirements.yml` | Not read at runtime. The collection list for the planned `ee-minimal-rhel9` switch, see below |
 | `execution-environment/execution-environment.yml` | EE base image reference |
 | `PLAN.md` | Original design plan (historical) |
@@ -364,20 +384,23 @@ the file is kept, and why the list in it has to stay accurate even though nothin
 3. **Inventory** — one `localhost` host with `ansible_connection: local`. The play also sets
    `connection: local`, so any inventory works.
 4. **Job template** — project + EE + inventory + `deploy-automation-orchestrator.yml`.
-5. **Vault credential** — attach one so `vars/vault.yml` decrypts at runtime.
-6. **Survey** — `ocp_api_url` (text) and `ocp_admin_password` (password). Add `ocp_admin_username`
-   (text, default `admin`) if the cluster uses a different admin account.
+5. **Survey or credential injection** — `ocp_api_url` (text) and `ocp_admin_password` (password).
+   Add `ocp_admin_username` if needed. For AAP integration, supply `aap_gateway_url`,
+   `aap_admin_username`, and `aap_admin_password` together. The last is a password field.
+6. **Vault credential** — needed only if an explicitly loaded launch variables file is encrypted.
+   The repository's legacy vault is not read.
 
-No custom credential types are needed: AAP secrets live in the vault file, OCP credentials come
-from the survey.
+Cleanup needs the same AAP inputs and an exact-name list in `aap_cleanup_application_names`.
 
 ### From the CLI
 
 ```bash
 ansible-playbook deploy-automation-orchestrator.yml --ask-vault-pass \
-    -e ocp_api_url=https://api.cluster.example.com:6443 \
-    -e ocp_admin_password=<password>
+    -e @/path/to/launch.vault.yml
 ```
+
+Populate the encrypted launch file with OCP inputs and, when needed, the AAP target inputs.
+Keep decrypted files outside Git. No password needs to appear in shell arguments.
 
 Requires `redhat.openshift`, `kubernetes.core` and the `kubernetes` Python library locally.
 
@@ -404,9 +427,8 @@ Requires `redhat.openshift`, `kubernetes.core` and the `kubernetes` Python libra
    single endpoint that does the whole thing, so AAP admin credentials are passed once,
    transiently, and are not stored by Orchestrator. `ansible.platform` ended up unused.
 7. **AAP admin credentials *are* stored** in Orchestrator's own credential store (encrypted at
-   rest) for the integration health check. This is the one place credentials persist outside the
-   vault.
-8. **No secrets in git in plaintext.** AAP credentials are vault-encrypted and committed; OCP
+   rest) for the integration health check. They come from explicit launch inputs.
+8. **No secrets in git in plaintext.** AAP credentials come from explicit protected launch inputs; OCP
    credentials come from the survey; the OCP token is obtained at runtime; PostgreSQL and
    Orchestrator admin passwords are generated at runtime and live only in K8s secrets.
 9. **No separate subscription manifest.** The Orchestrator operator is published in the

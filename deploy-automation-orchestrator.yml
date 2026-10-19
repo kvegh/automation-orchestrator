@@ -6,7 +6,14 @@
 
   vars_files:
     - vars/main.yml
-    - vars/vault.yml
+
+  pre_tasks:
+    - name: Validate the explicitly selected AAP integration target before deployment
+      ansible.builtin.include_tasks: tasks/validate-aap-target.yml
+      when: >-
+        (aap_gateway_url | default('', true) | string | length > 0) or
+        (aap_admin_username | default('', true) | string | length > 0) or
+        (aap_admin_password | default('', true) | string | length > 0)
 
   tasks:
 
@@ -465,11 +472,11 @@
 
         # =======================================================================
         # AAP INTEGRATION
-        # Skipped when aap_gateway_url is not defined (provide via vault).
+        # Skipped when no AAP target is provided at launch.
         # =======================================================================
 
         - name: Configure AAP integration
-          when: aap_gateway_url is defined
+          when: orchestrator_aap_url is defined
           block:
 
             - name: Authenticate to Orchestrator API
@@ -545,6 +552,18 @@
                 validate_certs: false
               register: existing_idps
 
+            - name: Reject an existing AAP identity provider for a different target
+              ansible.builtin.assert:
+                that:
+                  - item.configuration.issuer_url | ansible.builtin.urlsplit('scheme') == orchestrator_aap_url | ansible.builtin.urlsplit('scheme')
+                  - item.configuration.issuer_url | ansible.builtin.urlsplit('netloc') == orchestrator_aap_url | ansible.builtin.urlsplit('netloc')
+                fail_msg: An existing AAP identity provider uses a different target; explicit migration is required.
+              loop: >-
+                {{ existing_idps.json.resources | default([])
+                   | selectattr('name', 'defined')
+                   | selectattr('name', 'search', '(?i)ansible|aap') | list }}
+              no_log: true
+
             - name: Set up AAP as OIDC identity provider
               ansible.builtin.uri:
                 url: "{{ orchestrator_url }}/api/v1/identity_providers/setup_aap_oidc"
@@ -553,11 +572,11 @@
                   Authorization: "Bearer {{ orch_token }}"
                 body_format: json
                 body:
-                  aap_url: "{{ aap_gateway_url }}"
+                  aap_url: "{{ orchestrator_aap_url }}"
                   organization: Default
-                  admin_username: "{{ aap_admin_username | default('admin') }}"
+                  admin_username: "{{ aap_admin_username }}"
                   admin_password: "{{ aap_admin_password }}"
-                  insecure_skip_tls_verify: true
+                  insecure_skip_tls_verify: "{{ not (aap_validate_certs | bool) }}"
                 validate_certs: false
                 status_code: [201]
               no_log: "{{ secure_logging | default(true) }}"
@@ -622,7 +641,7 @@
                   credential_type_id: "{{ orch_aap_cred_type_id }}"
                   project_id: "{{ orch_default_project_id }}"
                   inputs:
-                    username: "{{ aap_admin_username | default('admin') }}"
+                    username: "{{ aap_admin_username }}"
                     password: "{{ aap_admin_password }}"
                 validate_certs: false
                 status_code: [201]
@@ -653,6 +672,16 @@
                 validate_certs: false
               register: existing_integrations
 
+            - name: Reject an existing AAP integration for a different target
+              ansible.builtin.assert:
+                that:
+                  - item.configuration.base_url.rstrip('/') == orchestrator_aap_url
+                fail_msg: The existing AAP Demo integration uses a different target; explicit migration is required.
+              loop: >-
+                {{ existing_integrations.json.resources | default([])
+                   | selectattr('name', 'equalto', 'AAP Demo') | list }}
+              no_log: true
+
             - name: Create AAP integration
               ansible.builtin.uri:
                 url: "{{ orchestrator_url }}/api/v1/integrations"
@@ -667,8 +696,8 @@
                   management_credential_id: "{{ orch_aap_credential_id }}"
                   configuration:
                     integration_type: ansible_automation_platform
-                    base_url: "{{ aap_gateway_url }}"
-                    insecure_skip_tls_verify: true
+                    base_url: "{{ orchestrator_aap_url }}"
+                    insecure_skip_tls_verify: "{{ not (aap_validate_certs | bool) }}"
                 validate_certs: false
                 status_code: [201]
               when: >-
@@ -685,5 +714,5 @@
                   - "Orchestrator URL:   {{ orchestrator_url }}"
                   - "Identity Provider:  Ansible Automation Platform (auto-configured)"
                   - "Integration:        AAP Demo"
-                  - "AAP URL:            {{ aap_gateway_url }}"
+                  - "AAP URL:            {{ orchestrator_aap_url }}"
                   - "================================================"

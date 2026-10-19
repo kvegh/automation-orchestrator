@@ -17,6 +17,7 @@ pg_port: 5432
 pg_ssl_mode: require
 
 ocp_validate_certs: false
+aap_validate_certs: true
 
 # Required -- provide via job template survey or extra vars
 # ocp_api_url: "https://api.cluster.example.com:6443"
@@ -32,7 +33,9 @@ ocp_validate_certs: false
 #
 # ocp_api_token is obtained at runtime via the OCP OAuth flow -- never set it here.
 
-# AAP integration (skip AAP config if omitted)
+# AAP integration -- supply together at launch, omit all three for standalone deployment.
 # aap_gateway_url: "https://aap.example.com"
-# aap_admin_username: "admin"
-# aap_admin_password: "<vault>"
+# aap_admin_username: "<target-admin>"
+# aap_admin_password: "<password-credential>"
+# aap_ca_path: "/path/to/trusted-ca.pem"  # optional CA file for cleanup requests
+# aap_cleanup_application_names: ["Syntara"]  # required only for cleanup; exact names

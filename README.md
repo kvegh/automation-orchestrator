@@ -7,7 +7,8 @@ optional AAP integration.
 known gaps, [validation history](documentation.md#validation-history). [PLAN.md](PLAN.md) is the
 original design plan and is historical only.
 
-Last validated end to end on 2026-10-06, after this directory became its own repository — see
+The earlier deployment was validated end to end on 2026-10-06. The explicit-target changes
+are covered by local HTTPS tests; they have not been deployed to OpenShift. See
 [Validation history](documentation.md#validation-history).
 
 ## Prerequisites
@@ -31,7 +32,10 @@ by Red Hat**. This is a demo deployment. See
 | `cleanup-aap-orchestrator.yml` | Cleanup playbook — removes Orchestrator OAuth2 apps from AAP |
 | `sync-collections.yml` | Unused in the current deployment — syncs collections to private automation hub. Kept for a future switch to `ee-minimal-rhel9` ([why](documentation.md#files)) |
 | `vars/main.yml` | Default variables |
-| `vars/vault.yml.example` | Template for secrets (copy to `vault.yml`, encrypt) |
+| `vars/vault.yml.example` | Optional encrypted launch-input template; never loaded implicitly |
+| `tasks/validate-aap-target.yml` | Shared validation of the explicitly selected AAP target |
+| `tests/test_aap_target.py` | Local HTTPS tests for target selection and cleanup failure handling |
+| `design_decisions_history.md` | Decisions and implementation commit references |
 | `execution-environment/requirements.yml` | Not read at runtime — collection list staged for the `ee-minimal-rhel9` switch ([why](documentation.md#what-execution-environmentrequirementsyml-is-for)) |
 | `execution-environment/execution-environment.yml` | EE base image reference |
 | `documentation.md` | Full documentation |
@@ -56,30 +60,29 @@ interactive storage, copy it:
 podman save registry.redhat.io/.../ee-supported-rhel9:latest | podman --remote load
 ```
 
-### 2. Create the vault file
+### 2. Provide the intended AAP at launch
 
-```bash
-cp vars/vault.yml.example vars/vault.yml
-# Edit vars/vault.yml with your actual values
-ansible-vault encrypt vars/vault.yml
-```
+The playbooks no longer read the repository's `vars/vault.yml`. For AAP integration, supply
+`aap_gateway_url`, `aap_admin_username`, and `aap_admin_password` together through a password
+survey, credential injection, or an explicitly selected encrypted variables file. Omit all three
+(or leave all three empty) to deploy Orchestrator standalone.
 
-The vault only contains AAP credentials (`aap_gateway_url`, `aap_admin_username`,
-`aap_admin_password`). OCP credentials are provided at launch time via the job template survey —
-they are never stored in the vault.
+The target must be an HTTPS origin, for example `https://aap.example.com`. It must be reachable
+and trusted by the OpenShift pods; an internal URL works when the cluster can reach and resolve it.
+AAP certificate validation defaults to `true`. Cleanup also accepts `aap_ca_path` for a private CA
+file in the execution environment. That file does not install trust into Orchestrator pods.
 
-Omit `aap_gateway_url` from the vault to skip AAP integration (Orchestrator deploys standalone).
-
-**Note:** `aap_gateway_url` must be reachable from the OCP cluster — use the public URL (e.g.,
-`https://aap.example.com`), not an internal hostname that the remote OCP pods cannot resolve.
+For CLI use, copy `vars/vault.yml.example` outside this checkout, add the desired launch inputs,
+and encrypt the copy with `ansible-vault`. Do not put passwords into shell arguments.
 
 ### 3. Deploy Orchestrator
 
 ```bash
 ansible-playbook deploy-automation-orchestrator.yml --ask-vault-pass \
-  -e ocp_api_url=https://api.cluster.example.com:6443 \
-  -e ocp_admin_password=<password>
+  -e @/path/to/launch.vault.yml
 ```
+
+The encrypted launch file must also supply `ocp_api_url` and `ocp_admin_password`.
 
 The playbook automatically obtains an OCP API token at runtime using the OAuth
 `openshift-challenging-client` flow (with `X-CSRF-Token` header required by OCP 4.21+) — no manual
@@ -107,17 +110,12 @@ disables `no_log` on sensitive tasks so request/response bodies are visible in j
    any inventory works).
 4. **Job Template**: Create a job template using the project, EE, inventory, and
    `deploy-automation-orchestrator.yml` as the playbook.
-5. **Vault Credential**: Attach an Ansible Vault credential to the job template (decrypts
-   `vars/vault.yml` at runtime).
-6. **Survey**: Enable a survey with:
-   - `ocp_api_url` (text) — the OCP API URL, e.g.
-     `https://api.cluster-xyz.dyn.redhatworkshops.io:6443`
-   - `ocp_admin_password` (password) — the OCP admin password (stored encrypted, shown as
-     `$encrypted$`)
-   - `ocp_admin_username` (text, default `admin`) — optional, only if the cluster admin account is
-     not `admin`
-7. No custom credential types needed — AAP secrets live in the encrypted vault file, OCP
-   credentials come from the survey.
+5. **Survey or credential injection**: Provide `ocp_api_url` and `ocp_admin_password`, plus
+   `ocp_admin_username` when it differs from `admin`. For AAP integration, also provide
+   `aap_gateway_url`, `aap_admin_username`, and `aap_admin_password`; use password fields for
+   passwords. Leave all three AAP inputs empty for a standalone deployment.
+6. Attach a Vault credential only if you explicitly load a launch-time Vault file. The old
+   repository `vars/vault.yml` no longer selects the target or requires a credential.
 
 ### Cleanup between deployments
 
@@ -126,8 +124,12 @@ step will fail because the OAuth2 app ("Syntara") from the old cluster still exi
 cleanup job template first:
 
 - **Playbook**: `cleanup-aap-orchestrator.yml`
-- **What it does**: Finds and deletes all OAuth2 applications matching "syntara" or "orchestrator"
-  from AAP Gateway
+- **Inputs**: The same explicit AAP URL and admin credentials, plus
+  `aap_cleanup_application_names`, a list of exact application names (for example `["Syntara"]`).
+  A survey textarea can provide the list as YAML or JSON.
+- **What it does**: Deletes only uniquely matched names on that target. Duplicate or unexpected
+  matches stop cleanup before application deletion. It uses a temporary Gateway token and revokes
+  it on success or failure; it never searches by substring.
 - **When to run**: Before deploying Orchestrator to a new OCP cluster, or after tearing down an old
   deployment
 
@@ -155,8 +157,24 @@ Step-by-step detail, expected pods and verification steps are in
 Re-running the playbook is safe. Secrets use a check-before-create pattern (passwords generated
 only on the first run); identity provider, credential and integration are each checked via the
 Orchestrator REST API before POST; OLM Subscriptions and InstallPlans are idempotent by nature.
+An existing AAP identity provider or integration for a different URL stops the run rather than
+silently retaining the old target. Rebinding an existing Orchestrator is a separate migration.
 
 ## Known gaps
 
 The PostgreSQL image version is unpinned and the EE is larger than it needs to be — see
 [Known gaps / TODO](documentation.md#known-gaps--todo).
+
+## Validation
+
+With Ansible, Python, and OpenSSL already available:
+
+```bash
+python3 -m unittest discover -s tests -v
+ANSIBLE_LOCAL_TEMP=/tmp/orchestrator-ansible-local ansible-playbook --syntax-check -i localhost, cleanup-aap-orchestrator.yml
+```
+
+The tests start only a local HTTPS Gateway double, trust its generated test certificate, and run
+actual Ansible cleanup tasks. They check target selection, exact matching, missing applications,
+ambiguous results, deletion failure, token revocation, and rejection of unsafe inputs before any
+network request. They do not contact AAP or OpenShift.
