@@ -7,6 +7,9 @@ optional AAP integration.
 known gaps, [validation history](documentation.md#validation-history). [PLAN.md](PLAN.md) is the
 original design plan and is historical only.
 
+Future work is recorded in [TODO.md](TODO.md), including the live workflow
+visualization backlog item.
+
 The explicit-target Core 2.20 deployment passed on OpenShift 4.21 on 2026-11-13,
 including ready application/database state, trusted public route, protected API
 login, AAP identity-provider registration and an available AAP integration. Native
@@ -43,6 +46,7 @@ by Red Hat**. This is a demo deployment. See
 | `execution-environment/requirements.yml` | Matching retained builder/sync input; runtime uses native project requirements |
 | `execution-environment/execution-environment.yml` | EE base image reference |
 | `documentation.md` | Full documentation |
+| `TODO.md` | Future project work |
 | `PLAN.md` | Original design plan (historical) |
 
 ## Usage
