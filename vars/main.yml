@@ -16,7 +16,8 @@ cnpg_storage_size: 10Gi
 pg_port: 5432
 pg_ssl_mode: require
 
-ocp_validate_certs: false
+ocp_validate_certs: true
+orchestrator_validate_certs: true
 aap_validate_certs: true
 
 # Required -- provide via job template survey or extra vars

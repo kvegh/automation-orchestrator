@@ -143,15 +143,21 @@ to be right before anything else can work.
 
 `orchestrator_namespace`, `cnpg_namespace`, `orchestrator_channel`, `cnpg_channel`,
 `orchestrator_operator_name`, `cnpg_operator_name`, `orchestrator_cr_name`, `cnpg_cluster_name`,
-`cnpg_instances`, `cnpg_storage_size`, `pg_port`, `pg_ssl_mode`, `ocp_validate_certs`, `aap_validate_certs`.
+`cnpg_instances`, `cnpg_storage_size`, `pg_port`, `pg_ssl_mode`, `ocp_validate_certs`,
+`orchestrator_validate_certs`, `aap_validate_certs`.
 
-`ocp_validate_certs` is `false` because demo.redhat.com clusters use self-signed certificates.
+All three certificate-verification settings default to `true`. For an OpenShift API
+signed by a cluster CA, supply its trusted PEM bundle as `ocp_ca_bundle` through protected
+launch variables. Native Kubernetes modules use a temporary CA file that is removed on
+success or failure. `orchestrator_ca_path` optionally names an existing trusted CA file
+inside the execution environment for a privately signed Orchestrator route. No certificate
+is trusted merely because it was received over an unverified connection.
 
-`secure_logging` is not declared in `vars/main.yml` but is honoured throughout: every task that
-carries a credential uses `no_log: "{{ secure_logging | default(true) }}"`. Pass
-`-e secure_logging=false` to see request and response bodies when debugging an auth failure. Do
-not leave it off — AAP job events capture `invocation.module_args.body`, which contains plaintext
-passwords.
+`secure_logging` defaults to true. Authentication tasks and the complete deployment block
+protect credential bodies, generated passwords, token facts and authenticated responses.
+The summary contains no generated administrator password. Turning secure logging off is
+an explicit diagnostic override that can expose credentials in AAP events; use synthetic
+inputs for that mode, and keep it enabled for real deployments.
 
 ---
 
@@ -496,8 +502,9 @@ one call. Source: `syntara/identity_providers/models/aap_setup.py` → `AAPOIDCS
 Returns `502 AAP_AUTHENTICATION_ERROR` ("AAP authentication failed. Check your admin credentials.")
 when the AAP credentials are wrong. That is an Orchestrator-side error, not an AAP API error.
 
-`insecure_skip_tls_verify: true` is required whenever the Orchestrator pods cannot verify AAP's
-certificate — self-signed, internal CA, or a reverse-proxy certificate not in the pod trust store.
+Keep `insecure_skip_tls_verify: false`. If the Orchestrator pods cannot verify AAP's
+certificate, configure the correct CA trust in those pods before integration. A private CA
+does not require disabling verification.
 
 ### Identity provider — manual
 
@@ -619,12 +626,15 @@ the OAuth task. Play-level `module_defaults` are evaluated before any task runs,
 *"A non-empty X-CSRF-Token header is required to receive basic-auth challenges"*. Any non-empty
 value works.
 
-**demo.redhat.com clusters use self-signed certificates.** `ocp_validate_certs: false` is required.
+**A cluster API can use a private CA.** Supply the trusted cluster CA through
+`ocp_ca_bundle`; keep `ocp_validate_certs: true`. The public console and OAuth routes can
+have a different, publicly trusted certificate chain from the API.
 
 **`no_log` is mandatory on credential-bearing tasks.** AAP job events record
 `invocation.module_args.body` verbatim, including plaintext passwords. The affected tasks are the
 OCP OAuth request and token extraction, Orchestrator login and re-login, `setup_aap_oidc`, and
-credential creation. All six use `no_log: "{{ secure_logging | default(true) }}"`.
+credential creation. Authentication and the entire deployment block use protected logging
+by default, also covering registered token facts and Kubernetes Secret responses.
 
 **Never set a block-level `vars:` default for a variable that may come from the vault.**
 `aap_admin_username: "{{ aap_admin_username | default('admin') }}"` is a recursive template loop.

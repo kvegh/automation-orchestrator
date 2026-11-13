@@ -54,10 +54,14 @@ class AAPTargetTests(unittest.TestCase):
 
             def handle_request(self):
                 path = urlsplit(self.path)
+                # Consume the request before replying. Core 2.20 can stream the
+                # body after headers; an early close otherwise causes EPIPE.
+                body_bytes = self.rfile.read(int(self.headers.get("Content-Length", "0")))
                 test.requests.append((self.command, self.path, self.headers.get("Authorization")))
                 status, body = 200, {}
                 expected_auth = "Bearer temporary-test-token"
                 if self.command == "POST" and path.path == "/api/gateway/v1/tokens/":
+                    test.assertEqual(json.loads(body_bytes)["scope"], "write")
                     expected_auth = "Basic " + base64.b64encode(b"target-admin:target-password").decode()
                     status, body = 201, {"id": 99, "token": "temporary-test-token"}
                 elif self.command == "GET" and path.path == "/api/gateway/v1/applications/":

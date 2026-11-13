@@ -45,7 +45,7 @@
         user: "{{ ocp_admin_username | default('admin') }}"
         password: "{{ ocp_admin_password }}"
         force_basic_auth: true
-        validate_certs: false
+        validate_certs: "{{ ocp_validate_certs }}"
         follow_redirects: none
         status_code: [302]
       register: ocp_oauth_response
@@ -56,12 +56,30 @@
         ocp_api_token: "{{ ocp_oauth_response.location | regex_search('access_token=([^&]+)', '\\1') | first }}"
       no_log: "{{ secure_logging | default(true) }}"
 
+    - name: Prepare an explicitly supplied OpenShift API CA bundle
+      when: ocp_ca_bundle | default('') | length > 0
+      no_log: true
+      block:
+        - name: Allocate a temporary CA bundle in this execution environment
+          ansible.builtin.tempfile:
+            state: file
+            suffix: .pem
+          register: ocp_ca_file
+
+        - name: Write the supplied OpenShift CA bundle
+          ansible.builtin.copy:
+            content: "{{ ocp_ca_bundle }}"
+            dest: "{{ ocp_ca_file.path }}"
+            mode: '0600'
+
     - name: Deploy Orchestrator on OCP
+      no_log: "{{ secure_logging | default(true) | bool }}"
       module_defaults:
         group/kubernetes.core.k8s:
           host: "{{ ocp_api_url }}"
           api_key: "{{ ocp_api_token }}"
           validate_certs: "{{ ocp_validate_certs }}"
+          ca_cert: "{{ ocp_ca_file.path | default(omit) }}"
       block:
 
         # =======================================================================
@@ -466,7 +484,7 @@
               - "================================================"
               - "URL:            {{ orchestrator_url }}"
               - "Admin user:     admin"
-              - "Admin password: {{ orchestrator_admin_password }}"
+              - "Admin password: stored in the OpenShift administrator-password Secret"
               - "PG host:        {{ cnpg_cluster_name }}-rw.{{ orchestrator_namespace }}.svc"
               - "================================================"
 
@@ -487,7 +505,8 @@
                 body:
                   username: admin
                   password: "{{ orchestrator_admin_password }}"
-                validate_certs: false
+                validate_certs: "{{ orchestrator_validate_certs }}"
+                ca_path: "{{ orchestrator_ca_path | default(omit) }}"
                 status_code: [200]
               register: orch_auth
               no_log: "{{ secure_logging | default(true) }}"
@@ -506,7 +525,8 @@
                 method: GET
                 headers:
                   Authorization: "Bearer {{ orch_token }}"
-                validate_certs: false
+                validate_certs: "{{ orchestrator_validate_certs }}"
+                ca_path: "{{ orchestrator_ca_path | default(omit) }}"
               register: orch_admin_user
 
             - name: Change local admin email to avoid OIDC collision
@@ -518,7 +538,8 @@
                 body_format: json
                 body:
                   email: "local-admin@orchestrator.internal"
-                validate_certs: false
+                validate_certs: "{{ orchestrator_validate_certs }}"
+                ca_path: "{{ orchestrator_ca_path | default(omit) }}"
                 status_code: [200]
               when: orch_admin_user.json.email != 'local-admin@orchestrator.internal'
 
@@ -532,7 +553,8 @@
                 body:
                   username: admin
                   password: "{{ orchestrator_admin_password }}"
-                validate_certs: false
+                validate_certs: "{{ orchestrator_validate_certs }}"
+                ca_path: "{{ orchestrator_ca_path | default(omit) }}"
                 status_code: [200]
               register: orch_reauth
               no_log: "{{ secure_logging | default(true) }}"
@@ -549,7 +571,8 @@
                 method: GET
                 headers:
                   Authorization: "Bearer {{ orch_token }}"
-                validate_certs: false
+                validate_certs: "{{ orchestrator_validate_certs }}"
+                ca_path: "{{ orchestrator_ca_path | default(omit) }}"
               register: existing_idps
 
             - name: Reject an existing AAP identity provider for a different target
@@ -577,7 +600,8 @@
                   admin_username: "{{ aap_admin_username }}"
                   admin_password: "{{ aap_admin_password }}"
                   insecure_skip_tls_verify: "{{ not (aap_validate_certs | bool) }}"
-                validate_certs: false
+                validate_certs: "{{ orchestrator_validate_certs }}"
+                ca_path: "{{ orchestrator_ca_path | default(omit) }}"
                 status_code: [201]
               no_log: "{{ secure_logging | default(true) }}"
               when: >-
@@ -594,7 +618,8 @@
                 method: GET
                 headers:
                   Authorization: "Bearer {{ orch_token }}"
-                validate_certs: false
+                validate_certs: "{{ orchestrator_validate_certs }}"
+                ca_path: "{{ orchestrator_ca_path | default(omit) }}"
               register: orch_projects
 
             - name: Set default project ID
@@ -610,7 +635,8 @@
                 method: GET
                 headers:
                   Authorization: "Bearer {{ orch_token }}"
-                validate_certs: false
+                validate_certs: "{{ orchestrator_validate_certs }}"
+                ca_path: "{{ orchestrator_ca_path | default(omit) }}"
               register: orch_cred_types
 
             - name: Set AAP credential type ID
@@ -626,7 +652,8 @@
                 method: GET
                 headers:
                   Authorization: "Bearer {{ orch_token }}"
-                validate_certs: false
+                validate_certs: "{{ orchestrator_validate_certs }}"
+                ca_path: "{{ orchestrator_ca_path | default(omit) }}"
               register: existing_credentials
 
             - name: Create AAP health-check credential
@@ -643,7 +670,8 @@
                   inputs:
                     username: "{{ aap_admin_username }}"
                     password: "{{ aap_admin_password }}"
-                validate_certs: false
+                validate_certs: "{{ orchestrator_validate_certs }}"
+                ca_path: "{{ orchestrator_ca_path | default(omit) }}"
                 status_code: [201]
               register: created_credential
               no_log: "{{ secure_logging | default(true) }}"
@@ -669,7 +697,8 @@
                 method: GET
                 headers:
                   Authorization: "Bearer {{ orch_token }}"
-                validate_certs: false
+                validate_certs: "{{ orchestrator_validate_certs }}"
+                ca_path: "{{ orchestrator_ca_path | default(omit) }}"
               register: existing_integrations
 
             - name: Reject an existing AAP integration for a different target
@@ -698,7 +727,8 @@
                     integration_type: ansible_automation_platform
                     base_url: "{{ orchestrator_aap_url }}"
                     insecure_skip_tls_verify: "{{ not (aap_validate_certs | bool) }}"
-                validate_certs: false
+                validate_certs: "{{ orchestrator_validate_certs }}"
+                ca_path: "{{ orchestrator_ca_path | default(omit) }}"
                 status_code: [201]
               when: >-
                 (existing_integrations.json.resources | default([]))
@@ -716,3 +746,11 @@
                   - "Integration:        AAP Demo"
                   - "AAP URL:            {{ orchestrator_aap_url }}"
                   - "================================================"
+
+      always:
+        - name: Remove the temporary OpenShift API CA bundle
+          ansible.builtin.file:
+            path: "{{ ocp_ca_file.path }}"
+            state: absent
+          when: ocp_ca_file is defined and ocp_ca_file.path is defined
+          no_log: true

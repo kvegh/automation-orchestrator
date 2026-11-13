@@ -96,8 +96,19 @@ demo.redhat.com (RHPDS) URL convention** — `https://api.<cluster>.<domain>:644
 `*.apps.<cluster>.<domain>`. On a cluster that does not follow it, pass `orchestrator_route_host`
 explicitly. See [Route hostname derivation](documentation.md#route-hostname-derivation).
 
-To debug credential-related task failures, pass `secure_logging: false` as an extra var — this
-disables `no_log` on sensitive tasks so request/response bodies are visible in job output.
+Keep `secure_logging: true` for deployments. Authentication and deployment results are
+protected, including token facts and Kubernetes Secret responses. The deployment summary
+does not print the generated administrator password; retrieve it through the authorized
+OpenShift Secret access described in the product documentation.
+
+OpenShift API, Orchestrator API and AAP certificate verification default to `true`.
+For a cluster API signed by its own CA, supply the trusted PEM bundle as `ocp_ca_bundle`
+in the protected launch variables. The playbook writes it to a temporary execution-environment
+file, passes that file to the native Kubernetes modules, and removes it on success or failure.
+For a privately signed Orchestrator route, `orchestrator_ca_path` can name its trusted CA
+file already available inside the execution environment. Obtain CA material from the cluster
+administrator or an authenticated trusted source; never treat an unverified downloaded
+certificate as established trust.
 
 ### Running as an AAP Job Template
 
