@@ -30,6 +30,23 @@ and unsafe inputs, empty standalone survey inputs, target drift, exact name sele
 results, missing applications, deletion failures, token revocation, and protected secrets. No live
 Orchestrator deployment or AAP application cleanup was run.
 
+## Require a launch-specific choice before skipping certificate verification
+
+Implementation: `7ae8fb4`.
+
+The owner explicitly chose a required deployment survey named Disable TLS
+verification, default No. Only an exact Yes answer for that launch skips certificate
+verification for deployment endpoints; HTTPS encryption and protected logging stay
+enabled. No or omission verifies certificates. Malformed answers fail before
+connections, and older verification variables cannot bypass No. Cleanup retains
+its independent verified default. The CaC survey and saved variables must never
+persist an opt-out default for later runs.
+
+Eighteen actual Core 2.20 tests passed, including a self-signed HTTPS endpoint that
+works only after Yes, default/missing/No rejection, malformed answer rejection and
+continued masking of synthetic credentials. This changes the explicitly chosen
+deployment policy; it does not establish a completed OpenShift deployment.
+
 ## Protect deployment results and verify certificate chains
 
 Implementation: `d108d584826b9dfc13be001ae3bb58ec5b34deef`.
