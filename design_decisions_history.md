@@ -30,6 +30,31 @@ and unsafe inputs, empty standalone survey inputs, target drift, exact name sele
 results, missing applications, deletion failures, token revocation, and protected secrets. No live
 Orchestrator deployment or AAP application cleanup was run.
 
+## Protect deployment results and verify certificate chains
+
+Implementation: `d108d584826b9dfc13be001ae3bb58ec5b34deef`.
+
+Preparation for a new explicitly requested deployment exposed a generated administrator
+password in the summary and unprotected registered token facts. The deployment block now
+inherits secure logging, and the summary points to the existing Kubernetes Secret without
+printing its value. The job template, credential sources and deployment architecture stay
+the same.
+
+OpenShift and Orchestrator certificate verification now default to enabled, matching AAP.
+A trusted cluster CA can be supplied through protected launch variables and passed to the
+native Kubernetes modules using a temporary file, removed on success or failure. This
+supports privately signed API certificates without accepting an unverified certificate or
+disabling TLS checks.
+
+Fifteen actual Ansible tests passed under Core 2.20 with synthetic credentials and local
+HTTPS services. They include rejection of an untrusted server before sending credentials,
+masking token facts and authenticated responses, a password-free summary, and CA-file
+cleanup after failure. The existing HTTPS test server was corrected to consume and check
+POST bodies before replying; early replies caused broken pipes with Core 2.20. These are
+offline results, not proof of deployment to a cluster. The generic cached test image lacks
+the Kubernetes collection group needed for a full playbook syntax check; that check did
+not establish success in that image. No new dependencies were installed for verification.
+
 ## Deploy through Ansible and reuse the supported execution environment
 
 Implementation: `d949bf0`.
