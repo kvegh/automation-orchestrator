@@ -4,6 +4,17 @@ This retrospective uses the repository's Git history and its documentation. Hist
 rationale below is documented in those sources; no deployment details or secret values are
 recorded here.
 
+## Keep workflow visualization in the future Git backlog
+
+Implementation: `7b7ac5a`.
+
+The owner moved live workflow visualization out of active work and into the
+repository's future TODO. The backlog retains the native workflow canvas scope:
+steps, execution status and results. The first workflow will be selected when
+the work is scheduled, so that choice no longer blocks current acceptance.
+README links the backlog. This documentation change does not implement a live
+view or change the deployed environment.
+
 ## Select the intended AAP explicitly for integration and cleanup
 
 Implementation: `e3d32ba`.
