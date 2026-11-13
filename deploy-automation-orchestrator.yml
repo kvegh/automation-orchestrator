@@ -8,6 +8,13 @@
     - vars/main.yml
 
   pre_tasks:
+    - name: Require an explicit supported TLS verification choice
+      ansible.builtin.assert:
+        that:
+          - disable_tls_verification | default('No') is string
+          - disable_tls_verification | default('No') in ['No', 'Yes']
+        fail_msg: Answer Disable TLS verification with No or Yes; the default is No.
+
     - name: Validate the explicitly selected AAP integration target before deployment
       ansible.builtin.include_tasks: tasks/validate-aap-target.yml
       when: >-
@@ -45,7 +52,7 @@
         user: "{{ ocp_admin_username | default('admin') }}"
         password: "{{ ocp_admin_password }}"
         force_basic_auth: true
-        validate_certs: "{{ ocp_validate_certs }}"
+        validate_certs: "{{ disable_tls_verification | default('No') != 'Yes' }}"
         follow_redirects: none
         status_code: [302]
       register: ocp_oauth_response
@@ -78,7 +85,7 @@
         group/kubernetes.core.k8s:
           host: "{{ ocp_api_url }}"
           api_key: "{{ ocp_api_token }}"
-          validate_certs: "{{ ocp_validate_certs }}"
+          validate_certs: "{{ disable_tls_verification | default('No') != 'Yes' }}"
           ca_cert: "{{ ocp_ca_file.path | default(omit) }}"
       block:
 
@@ -505,7 +512,7 @@
                 body:
                   username: admin
                   password: "{{ orchestrator_admin_password }}"
-                validate_certs: "{{ orchestrator_validate_certs }}"
+                validate_certs: "{{ disable_tls_verification | default('No') != 'Yes' }}"
                 ca_path: "{{ orchestrator_ca_path | default(omit) }}"
                 status_code: [200]
               register: orch_auth
@@ -525,7 +532,7 @@
                 method: GET
                 headers:
                   Authorization: "Bearer {{ orch_token }}"
-                validate_certs: "{{ orchestrator_validate_certs }}"
+                validate_certs: "{{ disable_tls_verification | default('No') != 'Yes' }}"
                 ca_path: "{{ orchestrator_ca_path | default(omit) }}"
               register: orch_admin_user
 
@@ -538,7 +545,7 @@
                 body_format: json
                 body:
                   email: "local-admin@orchestrator.internal"
-                validate_certs: "{{ orchestrator_validate_certs }}"
+                validate_certs: "{{ disable_tls_verification | default('No') != 'Yes' }}"
                 ca_path: "{{ orchestrator_ca_path | default(omit) }}"
                 status_code: [200]
               when: orch_admin_user.json.email != 'local-admin@orchestrator.internal'
@@ -553,7 +560,7 @@
                 body:
                   username: admin
                   password: "{{ orchestrator_admin_password }}"
-                validate_certs: "{{ orchestrator_validate_certs }}"
+                validate_certs: "{{ disable_tls_verification | default('No') != 'Yes' }}"
                 ca_path: "{{ orchestrator_ca_path | default(omit) }}"
                 status_code: [200]
               register: orch_reauth
@@ -571,7 +578,7 @@
                 method: GET
                 headers:
                   Authorization: "Bearer {{ orch_token }}"
-                validate_certs: "{{ orchestrator_validate_certs }}"
+                validate_certs: "{{ disable_tls_verification | default('No') != 'Yes' }}"
                 ca_path: "{{ orchestrator_ca_path | default(omit) }}"
               register: existing_idps
 
@@ -599,8 +606,8 @@
                   organization: Default
                   admin_username: "{{ aap_admin_username }}"
                   admin_password: "{{ aap_admin_password }}"
-                  insecure_skip_tls_verify: "{{ not (aap_validate_certs | bool) }}"
-                validate_certs: "{{ orchestrator_validate_certs }}"
+                  insecure_skip_tls_verify: "{{ disable_tls_verification | default('No') == 'Yes' }}"
+                validate_certs: "{{ disable_tls_verification | default('No') != 'Yes' }}"
                 ca_path: "{{ orchestrator_ca_path | default(omit) }}"
                 status_code: [201]
               no_log: "{{ secure_logging | default(true) }}"
@@ -618,7 +625,7 @@
                 method: GET
                 headers:
                   Authorization: "Bearer {{ orch_token }}"
-                validate_certs: "{{ orchestrator_validate_certs }}"
+                validate_certs: "{{ disable_tls_verification | default('No') != 'Yes' }}"
                 ca_path: "{{ orchestrator_ca_path | default(omit) }}"
               register: orch_projects
 
@@ -635,7 +642,7 @@
                 method: GET
                 headers:
                   Authorization: "Bearer {{ orch_token }}"
-                validate_certs: "{{ orchestrator_validate_certs }}"
+                validate_certs: "{{ disable_tls_verification | default('No') != 'Yes' }}"
                 ca_path: "{{ orchestrator_ca_path | default(omit) }}"
               register: orch_cred_types
 
@@ -652,7 +659,7 @@
                 method: GET
                 headers:
                   Authorization: "Bearer {{ orch_token }}"
-                validate_certs: "{{ orchestrator_validate_certs }}"
+                validate_certs: "{{ disable_tls_verification | default('No') != 'Yes' }}"
                 ca_path: "{{ orchestrator_ca_path | default(omit) }}"
               register: existing_credentials
 
@@ -670,7 +677,7 @@
                   inputs:
                     username: "{{ aap_admin_username }}"
                     password: "{{ aap_admin_password }}"
-                validate_certs: "{{ orchestrator_validate_certs }}"
+                validate_certs: "{{ disable_tls_verification | default('No') != 'Yes' }}"
                 ca_path: "{{ orchestrator_ca_path | default(omit) }}"
                 status_code: [201]
               register: created_credential
@@ -697,7 +704,7 @@
                 method: GET
                 headers:
                   Authorization: "Bearer {{ orch_token }}"
-                validate_certs: "{{ orchestrator_validate_certs }}"
+                validate_certs: "{{ disable_tls_verification | default('No') != 'Yes' }}"
                 ca_path: "{{ orchestrator_ca_path | default(omit) }}"
               register: existing_integrations
 
@@ -726,8 +733,8 @@
                   configuration:
                     integration_type: ansible_automation_platform
                     base_url: "{{ orchestrator_aap_url }}"
-                    insecure_skip_tls_verify: "{{ not (aap_validate_certs | bool) }}"
-                validate_certs: "{{ orchestrator_validate_certs }}"
+                    insecure_skip_tls_verify: "{{ disable_tls_verification | default('No') == 'Yes' }}"
+                validate_certs: "{{ disable_tls_verification | default('No') != 'Yes' }}"
                 ca_path: "{{ orchestrator_ca_path | default(omit) }}"
                 status_code: [201]
               when: >-

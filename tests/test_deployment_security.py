@@ -96,7 +96,8 @@ class DeploymentSecurityTests(unittest.TestCase):
     def integration_tasks(self):
         integration = next(t for t in self.deployment["block"] if t["name"] == "Configure AAP integration")
         names = {"Authenticate to Orchestrator API", "Set auth token", "Get local admin user info"}
-        return [{"name": self.deployment["name"], "no_log": self.deployment.get("no_log", False),
+        return [self.play["pre_tasks"][0],
+                {"name": self.deployment["name"], "no_log": self.deployment.get("no_log", False),
                  "block": [t for t in integration["block"] if t["name"] in names]}]
 
     def test_authenticated_results_and_token_facts_are_protected(self):
@@ -105,11 +106,33 @@ class DeploymentSecurityTests(unittest.TestCase):
         self.assertEqual(len(self.requests), 2)
 
     def test_untrusted_server_is_rejected_before_credentials_are_sent(self):
-        self.assertIs(self.defaults["ocp_validate_certs"], True)
-        self.assertIs(self.defaults["orchestrator_validate_certs"], True)
+        self.assertEqual(self.defaults["disable_tls_verification"], "No")
         result = self.run_tasks(self.integration_tasks())
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.requests, [])
+
+    def test_explicit_yes_allows_a_self_signed_endpoint_and_still_masks_secrets(self):
+        result = self.run_tasks(self.integration_tasks(), disable_tls_verification="Yes")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(len(self.requests), 2)
+
+    def test_legacy_false_flags_cannot_bypass_the_no_answer(self):
+        result = self.run_tasks(self.integration_tasks(), disable_tls_verification="No",
+                                ocp_validate_certs=False, orchestrator_validate_certs=False,
+                                aap_validate_certs=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.requests, [])
+
+    def test_missing_answer_verifies_tls_and_malformed_answers_stop_before_requests(self):
+        self.defaults.pop("disable_tls_verification")
+        result = self.run_tasks(self.integration_tasks())
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.requests, [])
+        for answer in (True, False, "yes", "false", "", 1):
+            with self.subTest(answer=answer):
+                result = self.run_tasks(self.integration_tasks(), disable_tls_verification=answer)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(self.requests, [])
 
     def test_summary_never_renders_the_administrator_password(self):
         summary = next(t for t in self.deployment["block"] if t["name"] == "Display Orchestrator deployment info")

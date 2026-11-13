@@ -101,7 +101,16 @@ protected, including token facts and Kubernetes Secret responses. The deployment
 does not print the generated administrator password; retrieve it through the authorized
 OpenShift Secret access described in the product documentation.
 
-OpenShift API, Orchestrator API and AAP certificate verification default to `true`.
+The deployment survey includes a required **Disable TLS verification** choice,
+defaulting to **No**. No, or an omitted CLI answer, verifies the OpenShift API,
+OAuth, Orchestrator API and AAP integration certificates. An explicit **Yes** skips
+those certificate checks for that one deployment; HTTPS encryption and protected
+logging remain enabled. Legacy verification flags cannot silently override No.
+Never save Yes in the job template's extra variables or change the CaC default.
+Each deployment against unverified endpoints must explicitly select Yes again.
+For CLI launches, quote `disable_tls_verification: 'Yes'` in protected launch
+variables; booleans, lowercase answers and other values are rejected.
+
 For a cluster API signed by its own CA, supply the trusted PEM bundle as `ocp_ca_bundle`
 in the protected launch variables. The playbook writes it to a temporary execution-environment
 file, passes that file to the native Kubernetes modules, and removes it on success or failure.

@@ -188,7 +188,8 @@ class AAPTargetTests(unittest.TestCase):
     def run_deploy_preflight(self, assertions):
         source = yaml.safe_load((ROOT / "deploy-automation-orchestrator.yml").read_text())[0]
         preflight = source["pre_tasks"]
-        preflight[0]["ansible.builtin.include_tasks"] = str(ROOT / "tasks/validate-aap-target.yml")
+        target_check = next(t for t in preflight if "ansible.builtin.include_tasks" in t)
+        target_check["ansible.builtin.include_tasks"] = str(ROOT / "tasks/validate-aap-target.yml")
         playbook = self.directory / "deploy-preflight.yml"
         playbook.write_text(yaml.safe_dump([{
             "hosts": "localhost", "connection": "local", "gather_facts": False,

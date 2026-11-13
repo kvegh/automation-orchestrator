@@ -143,10 +143,19 @@ to be right before anything else can work.
 
 `orchestrator_namespace`, `cnpg_namespace`, `orchestrator_channel`, `cnpg_channel`,
 `orchestrator_operator_name`, `cnpg_operator_name`, `orchestrator_cr_name`, `cnpg_cluster_name`,
-`cnpg_instances`, `cnpg_storage_size`, `pg_port`, `pg_ssl_mode`, `ocp_validate_certs`,
-`orchestrator_validate_certs`, `aap_validate_certs`.
+`cnpg_instances`, `cnpg_storage_size`, `pg_port`, `pg_ssl_mode`,
+`disable_tls_verification`, `aap_validate_certs`.
 
-All three certificate-verification settings default to `true`. For an OpenShift API
+Deployment uses the required **Disable TLS verification** survey, default **No**.
+Only the exact string **Yes** disables verification for that launch's OpenShift,
+OAuth, Orchestrator and AAP integration requests. No or omission verifies them;
+invalid values fail before network requests. HTTPS transport and secure logging
+remain enabled. The answer is never saved as a template opt-out or a Yes default
+in CaC. Old `ocp_validate_certs`, `orchestrator_validate_certs` and
+`aap_validate_certs` overrides cannot bypass a No deployment answer. Cleanup
+continues to use its separate `aap_validate_certs: true` default.
+
+For an OpenShift API
 signed by a cluster CA, supply its trusted PEM bundle as `ocp_ca_bundle` through protected
 launch variables. Native Kubernetes modules use a temporary CA file that is removed on
 success or failure. `orchestrator_ca_path` optionally names an existing trusted CA file
@@ -502,9 +511,9 @@ one call. Source: `syntara/identity_providers/models/aap_setup.py` → `AAPOIDCS
 Returns `502 AAP_AUTHENTICATION_ERROR` ("AAP authentication failed. Check your admin credentials.")
 when the AAP credentials are wrong. That is an Orchestrator-side error, not an AAP API error.
 
-Keep `insecure_skip_tls_verify: false`. If the Orchestrator pods cannot verify AAP's
-certificate, configure the correct CA trust in those pods before integration. A private CA
-does not require disabling verification.
+The deployment sets `insecure_skip_tls_verify` from its explicit per-run survey
+answer. No keeps it false; Yes sets it true. For verified integration with a private
+CA, configure the correct trust in the pods before integration.
 
 ### Identity provider — manual
 
@@ -627,7 +636,7 @@ the OAuth task. Play-level `module_defaults` are evaluated before any task runs,
 value works.
 
 **A cluster API can use a private CA.** Supply the trusted cluster CA through
-`ocp_ca_bundle`; keep `ocp_validate_certs: true`. The public console and OAuth routes can
+`ocp_ca_bundle` and leave Disable TLS verification at No. The public console and OAuth routes can
 have a different, publicly trusted certificate chain from the API.
 
 **`no_log` is mandatory on credential-bearing tasks.** AAP job events record
