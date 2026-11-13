@@ -17,8 +17,9 @@ are covered by local HTTPS tests; they have not been deployed to OpenShift. See
 - AAP 2.7+, reachable from the OCP cluster on port 443
 - A default StorageClass that can provision a 10Gi RWO volume for PostgreSQL
 - OCP cluster-admin credentials (provided at launch via job template survey)
-- `ee-supported-rhel9` registered as an Execution Environment in AAP (includes all certified
-  collections and the `kubernetes` Python library)
+- The receiving AAP's approved Core 2.20 execution environment, including the
+  Kubernetes Python client and jsonpatch, plus its existing certified Hub credentials
+  for normal project requirements
 
 PostgreSQL is provisioned as a **single-instance CloudNativePG cluster — no HA, and not supported
 by Red Hat**. This is a demo deployment. See
@@ -36,29 +37,25 @@ by Red Hat**. This is a demo deployment. See
 | `tasks/validate-aap-target.yml` | Shared validation of the explicitly selected AAP target |
 | `tests/test_aap_target.py` | Local HTTPS tests for target selection and cleanup failure handling |
 | `design_decisions_history.md` | Decisions and implementation commit references |
-| `execution-environment/requirements.yml` | Not read at runtime — collection list staged for the `ee-minimal-rhel9` switch ([why](documentation.md#what-execution-environmentrequirementsyml-is-for)) |
+| `collections/requirements.yml` | Pinned OpenShift/Kubernetes collections installed by normal AAP project sync |
+| `execution-environment/requirements.yml` | Matching retained builder/sync input; runtime uses native project requirements |
 | `execution-environment/execution-environment.yml` | EE base image reference |
 | `documentation.md` | Full documentation |
 | `PLAN.md` | Original design plan (historical) |
 
 ## Usage
 
-### 1. Register the EE in AAP
+### 1. Use the receiving AAP's configured execution environment
 
-No custom build needed. The stock `ee-supported-rhel9` image includes the required certified
-collections (`redhat.openshift`, `kubernetes.core`) and the `kubernetes` Python library.
+The CaC importer binds this project to the receiving AAP's approved Core 2.20
+runtime with the Kubernetes Python client and jsonpatch. Collections are supplied
+through `collections/requirements.yml`: `redhat.openshift` 6.0.0 and
+`kubernetes.core` 6.6.0. Normal project sync obtains them through the organization's
+existing certified Hub credentials. No additional image, credential or manual
+package installation is introduced by this project.
 
-In AAP, create an Execution Environment pointing at:
-```
-registry.redhat.io/ansible-automation-platform-27/ee-supported-rhel9:latest
-```
-
-**AAP containerized note:** The image must exist in AAP's service podman storage
-(`~/aap/containers/storage`), not the interactive user's storage. If the image is only in
-interactive storage, copy it:
-```bash
-podman save registry.redhat.io/.../ee-supported-rhel9:latest | podman --remote load
-```
+For a separately managed CLI runtime, ensure those Python dependencies and
+collections are already available before running the playbook.
 
 ### 2. Provide the intended AAP at launch
 
@@ -123,8 +120,8 @@ certificate as established trust.
 
 1. **Project**: Create a project pointing at this repo. Enable `scm_update_on_launch: true` so the
    playbook always runs the latest version.
-2. **Execution Environment**: Register `ee-supported-rhel9:latest` with pull policy `Never` (the
-   image must already be in AAP's podman storage — see Step 1).
+2. **Execution Environment**: Use the receiver's configured Core 2.20 runtime and
+   the organization's existing certified Hub credentials as described above.
 3. **Inventory**: Create an inventory with a single `localhost` host. Set
    `ansible_connection: local` as a host variable (the playbook also sets `connection: local`, so
    any inventory works).

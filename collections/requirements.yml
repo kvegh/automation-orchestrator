@@ -1,0 +1,7 @@
+---
+# Installed by normal AAP project sync from the receiving organization's Hub.
+collections:
+  - name: redhat.openshift
+    version: '6.0.0'
+  - name: kubernetes.core
+    version: '6.6.0'

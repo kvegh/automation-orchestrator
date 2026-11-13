@@ -61,9 +61,8 @@ direction — but it **does** need to be reachable *from* the OCP pods.
   (the playbook asserts both).
 - A default StorageClass able to provision a 10Gi RWO volume for the PostgreSQL cluster
   (`cnpg_storage_size`). Red Hat's own template defaults to 5Gi; 10Gi is used here for headroom.
-- `ee-supported-rhel9` registered as an execution environment in AAP. It already contains
-  `redhat.openshift`, `kubernetes.core`, `ansible.platform` and the `kubernetes` Python library,
-  so no custom EE build is needed.
+- The receiving AAP's approved Core 2.20 runtime with the Kubernetes Python client
+  and jsonpatch, plus its existing certified Hub credentials for native collection requirements.
 - Explicit AAP target credentials at launch when integration is requested. The repository
   `vars/vault.yml` is no longer loaded; attach a Vault credential only for an explicitly selected
   encrypted launch file.
@@ -343,51 +342,37 @@ the cleanup playbook exists to remove.
 |---|---|
 | `deploy-automation-orchestrator.yml` | Main playbook — operators, PostgreSQL, CR, AAP integration |
 | `cleanup-aap-orchestrator.yml` | Removes Orchestrator OAuth2 apps from AAP (run between clusters) |
-| `sync-collections.yml` | **Not used in the current deployment.** Sets a requirements filter on the `rh-certified` remote in private automation hub, triggers a sync, and waits for it. Kept for the day the EE switches back to `ee-minimal-rhel9` and collections have to come from PAH at runtime instead of being baked into the image. |
+| `sync-collections.yml` | Retained historical Hub preparation playbook; not launched by this deployment. Required certified versions are already available in the receiving Hub. |
 | `vars/main.yml` | Non-secret defaults |
 | `vars/vault.yml` | Legacy encrypted inputs; not loaded by either deployment or cleanup |
 | `vars/vault.yml.example` | Optional launch-input template — copy outside the checkout and encrypt |
 | `tasks/validate-aap-target.yml` | Shared explicit-target input validation |
 | `tests/test_aap_target.py` | Local HTTPS behavior tests |
 | `design_decisions_history.md` | Decision rationale and implementation commit references |
-| `execution-environment/requirements.yml` | Not read at runtime. The collection list for the planned `ee-minimal-rhel9` switch, see below |
+| `collections/requirements.yml` | Pinned native AAP project dependencies from the receiving Hub |
+| `execution-environment/requirements.yml` | Matching optional builder/sync input, see below |
 | `execution-environment/execution-environment.yml` | EE base image reference |
 | `PLAN.md` | Original design plan (historical) |
 | `PROMPT.md` | The implementation prompt used to build this |
 | `documentation.md` | This file |
 
-### What `execution-environment/requirements.yml` is for
+### Native project collection requirements
 
-It is deliberately **not** at `collections/requirements.yml`. AAP project sync installs from that
-exact path at the repo root, and neither collection is available on the configured galaxy server
-(rh-certified only), so a file there fails the sync outright:
+`collections/requirements.yml` is the runtime collection input. Normal AAP project
+sync installs `redhat.openshift` 6.0.0 and `kubernetes.core` 6.6.0 through the
+receiving organization's existing certified Hub credentials. Both exact versions
+were verified in that Hub; both support Ansible Core >= 2.16, and OpenShift's
+Kubernetes dependency is satisfied by the selected pin.
 
-```
-ERROR! Could not satisfy the following requirements:
-* redhat.openshift:* (direct request)
-```
+The earlier project omitted native requirements because its old stock supported
+image bundled these modules and the old Hub lacked the packages. The current
+approved shared Core 2.20 image supplies Python dependencies, and the receiving
+Hub now supplies the collections. A local syntax check exposed the missing
+collection group before deployment. No new image or credential is needed.
 
-Nothing needs installing at sync time in any case — both collections ship in
-`ee-supported-rhel9` (`redhat.openshift` 6.0.0, `kubernetes.core` 6.4.0).
-
-Its job is to be the input for the planned switch to a minimal custom EE. It is already wired into
-`execution-environment/execution-environment.yml` as `dependencies.galaxy`, commented out
-alongside the `ee-minimal-rhel9` base image:
-
-```yaml
-# dependencies:
-#     galaxy: requirements.yml
-```
-
-`ansible-builder` resolves that path relative to the definition file, so the sibling
-`requirements.yml` lands in the build context as `_build/requirements.yml` (verified with
-ansible-builder 3.1.1). The same file is what `sync-collections.yml` would push to private
-automation hub if collections ever have to be pulled at runtime instead.
-
-So the switch is a two-line uncomment rather than a rebuild of the EE definition — which is why
-the file is kept, and why the list in it has to stay accurate even though nothing reads it today.
-
----
+`execution-environment/requirements.yml` remains an aligned optional builder/sync
+input. It does not replace native AAP project requirements. The old local builder
+configuration is retained as historical setup, not run by this deployment.
 
 ## Running it
 
