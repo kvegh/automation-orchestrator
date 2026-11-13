@@ -112,9 +112,17 @@ class DeploymentSecurityTests(unittest.TestCase):
         self.assertEqual(self.requests, [])
 
     def test_explicit_yes_allows_a_self_signed_endpoint_and_still_masks_secrets(self):
-        result = self.run_tasks(self.integration_tasks(), disable_tls_verification="Yes")
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(len(self.requests), 2)
+        for answer in ("Yes", True):
+            with self.subTest(answer=answer):
+                self.requests.clear()
+                result = self.run_tasks(self.integration_tasks(), disable_tls_verification=answer)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(len(self.requests), 2)
+
+    def test_native_no_boolean_still_verifies_certificates(self):
+        result = self.run_tasks(self.integration_tasks(), disable_tls_verification=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.requests, [])
 
     def test_legacy_false_flags_cannot_bypass_the_no_answer(self):
         result = self.run_tasks(self.integration_tasks(), disable_tls_verification="No",
@@ -128,7 +136,7 @@ class DeploymentSecurityTests(unittest.TestCase):
         result = self.run_tasks(self.integration_tasks())
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.requests, [])
-        for answer in (True, False, "yes", "false", "", 1):
+        for answer in ("yes", "false", "", 1, 0, [], {}):
             with self.subTest(answer=answer):
                 result = self.run_tasks(self.integration_tasks(), disable_tls_verification=answer)
                 self.assertNotEqual(result.returncode, 0)

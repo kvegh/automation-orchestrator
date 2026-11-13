@@ -106,7 +106,8 @@ logging remain enabled. Legacy verification flags cannot silently override No.
 Never save Yes in the job template's extra variables or change the CaC default.
 Each deployment against unverified endpoints must explicitly select Yes again.
 For CLI launches, quote `disable_tls_verification: 'Yes'` in protected launch
-variables; booleans, lowercase answers and other values are rejected.
+variables. AAP can serialize the choice as a genuine boolean; true/false retain
+the Yes/No meanings. Lowercase strings, numbers and other values are rejected.
 
 For a cluster API signed by its own CA, supply the trusted PEM bundle as `ocp_ca_bundle`
 in the protected launch variables. The playbook writes it to a temporary execution-environment

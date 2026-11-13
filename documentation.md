@@ -146,7 +146,8 @@ to be right before anything else can work.
 `disable_tls_verification`, `aap_validate_certs`.
 
 Deployment uses the required **Disable TLS verification** survey, default **No**.
-Only the exact string **Yes** disables verification for that launch's OpenShift,
+Only **Yes** (or its genuine native boolean representation) disables verification
+for that launch's OpenShift,
 OAuth, Orchestrator and AAP integration requests. No or omission verifies them;
 invalid values fail before network requests. HTTPS transport and secure logging
 remain enabled. The answer is never saved as a template opt-out or a Yes default
