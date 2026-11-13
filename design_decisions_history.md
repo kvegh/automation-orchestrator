@@ -30,6 +30,22 @@ and unsafe inputs, empty standalone survey inputs, target drift, exact name sele
 results, missing applications, deletion failures, token revocation, and protected secrets. No live
 Orchestrator deployment or AAP application cleanup was run.
 
+## Preserve explicit Yes/No meaning across native survey value types
+
+Implementation: `3f0fc603e0812b5a1d5d8dae07789dab181dc5ef`.
+
+The first native deployment stopped at the initial type guard before any cluster
+changes: the AAP job record held Yes, but its runtime value failed the string
+test. The guard now accepts only the exact Yes/No strings or genuine boolean
+equivalents, with false retaining certificate verification. Numbers, arbitrary
+truthy strings and container values remain rejected. Invalid answers report only
+their type, and a credential-free message records the selected verification mode.
+The template and CaC default remain No.
+
+Eight focused actual Core 2.20 security tests passed, covering both Yes forms,
+native false, legacy-flag rejection, malformed values, protected results and CA
+cleanup. This is input-handling proof, not completed cluster deployment proof.
+
 ## Resolve OpenShift collections through native AAP project requirements
 
 Implementation: `9b64ee1`.
