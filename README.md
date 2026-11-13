@@ -7,8 +7,10 @@ optional AAP integration.
 known gaps, [validation history](documentation.md#validation-history). [PLAN.md](PLAN.md) is the
 original design plan and is historical only.
 
-The earlier deployment was validated end to end on 2026-10-06. The explicit-target changes
-are covered by local HTTPS tests; they have not been deployed to OpenShift. See
+The explicit-target Core 2.20 deployment passed on OpenShift 4.21 on 2026-11-13,
+including ready application/database state, trusted public route, protected API
+login, AAP identity-provider registration and an available AAP integration. Native
+workflow execution and human browser SSO are separate acceptance checks. See
 [Validation history](documentation.md#validation-history).
 
 ## Prerequisites
@@ -31,7 +33,7 @@ by Red Hat**. This is a demo deployment. See
 |------|---------|
 | `deploy-automation-orchestrator.yml` | Main playbook — operators, PG, CR, AAP integration |
 | `cleanup-aap-orchestrator.yml` | Cleanup playbook — removes Orchestrator OAuth2 apps from AAP |
-| `sync-collections.yml` | Unused in the current deployment — syncs collections to private automation hub. Kept for a future switch to `ee-minimal-rhel9` ([why](documentation.md#files)) |
+| `sync-collections.yml` | Historical Hub preparation playbook; not launched when the required certified versions are already available |
 | `vars/main.yml` | Default variables |
 | `vars/vault.yml.example` | Optional encrypted launch-input template; never loaded implicitly |
 | `tasks/validate-aap-target.yml` | Shared validation of the explicitly selected AAP target |

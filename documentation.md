@@ -254,6 +254,28 @@ namespace.
 
 ## Validation history
 
+### 2026-11-13 — explicit-target Core 2.20 deployment
+
+The normal imported deployment template succeeded against a newly selected
+OpenShift 4.21.42 cluster in about four minutes and 38 seconds. This run explicitly
+answered Yes to Disable TLS verification; the template and encrypted CaC default
+remain No. Its public implementation was `3f0fc60`, with decision documentation
+at `384279f`. Native project synchronization resolved the pinned certified
+OpenShift/Kubernetes collections without another execution image.
+
+Independent readback confirmed the Orchestrator custom resource Ready, a healthy
+CloudNativePG cluster, ready running application pods and completed bootstrap
+jobs. The public route passed normal certificate verification and returned HTTP
+200. Protected administrator API login succeeded. The AAP identity-provider issuer
+and automation integration pointed to the explicitly selected receiving AAP.
+Orchestrator's native integration validation returned success and persisted
+validation status available with no error. These establish both the deploying
+controller-to-cluster path and Orchestrator-to-AAP connectivity.
+
+Environment addresses, credentials and detailed operational receipts remain
+outside public Git. No business workflow was run and no human browser SSO result
+is claimed by this deployment verification.
+
 ### 2026-10-06 — after the repo/submodule reorganization
 
 This directory used to live inside the `AAP-advanced-features` umbrella repo and became its own
@@ -261,7 +283,7 @@ repository, consumed by the umbrella as a submodule. That moved the AAP project 
 `AAP-advanced-features/` to this directory, which changed three things: the job template playbook
 path lost its `automation-orchestrator/` prefix, `collections/requirements.yml` landed at the repo
 root where project sync reads it (and failed the sync — see
-[What `execution-environment/requirements.yml` is for](#what-execution-environmentrequirementsyml-is-for)),
+[the current native collection requirements](#native-project-collection-requirements)),
 and the umbrella's root `ansible.cfg` stopped applying.
 
 A full deployment was run against a fresh cluster to confirm none of it broke the deployment:
