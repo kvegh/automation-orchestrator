@@ -30,6 +30,23 @@ and unsafe inputs, empty standalone survey inputs, target drift, exact name sele
 results, missing applications, deletion failures, token revocation, and protected secrets. No live
 Orchestrator deployment or AAP application cleanup was run.
 
+## Resolve OpenShift collections through native AAP project requirements
+
+Implementation: `9b64ee1`.
+
+The shared Core 2.20 image supplies the approved Python clients but does not
+bundle the OpenShift/Kubernetes Ansible collection group. The project's earlier
+stock-image assumption therefore no longer matched the receiving execution
+environment. Normal project requirements now request redhat.openshift 6.0.0 and
+kubernetes.core 6.6.0 from the receiving organization's existing certified Hub
+credentials. Both exact versions and their compatible dependency/Core ranges
+were read from that Hub before this change.
+
+The retained builder input has matching pins. No new image, credential, wrapper
+or local package installation is introduced. Normal project synchronization and
+the actual deployment still need to establish runtime acceptance; Hub metadata
+alone is not a successful deployment.
+
 ## Require a launch-specific choice before skipping certificate verification
 
 Implementation: `7ae8fb4`.
